@@ -1,432 +1,584 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ePBB Mobile - OCR Scanner</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <!-- Tambahkan Tesseract.js untuk OCR -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <style>
-        .loading-spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border-left-color: #2563eb;
-            animation: spin 1s linear infinite;
+<!doctype html>
+<html lang="id" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi e-SPPT PBB KEL/DESA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- Library untuk Ekspor Excel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = window.__firebase_config ? JSON.parse(window.__firebase_config) : {};
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = window.__app_id || 'e-sppt-pbb-sukaluyu';
+
+    window.db = db;
+    window.auth = auth;
+    window.appId = appId;
+    window.firestore = { collection, doc, addDoc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, query, orderBy };
+
+    // Fungsi aktivasi tombol UI dengan pengecekan elemen
+    window.activateAppUI = () => {
+      const loginBtn = document.getElementById('loginBtn');
+      const authText = document.getElementById('authStatusText');
+      if (loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.textContent = "MASUK KE SISTEM";
+        loginBtn.classList.replace('bg-slate-400', 'bg-blue-600');
+        loginBtn.classList.add('hover:bg-blue-700', 'cursor-pointer');
+      }
+      if (authText) authText.textContent = "Koneksi Cloud Berhasil ✅";
+    };
+
+    const initAuth = async () => {
+      try {
+        if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+          await signInWithCustomToken(auth, window.__initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        #reader { width: 100%; border-radius: 20px; overflow: hidden; border: none !important; }
-        .form-input { @apply w-full bg-slate-100 border-none rounded-xl p-3 text-sm mt-1 focus:ring-2 focus:ring-blue-500; }
-        .label-style { @apply text-[10px] font-bold text-slate-400 uppercase; }
-        
-        .pulse-red {
-            animation: pulse-red 2s infinite;
-        }
-        @keyframes pulse-red {
-            0% { background-color: rgba(239, 68, 68, 0.1); }
-            50% { background-color: rgba(239, 68, 68, 0.3); }
-            100% { background-color: rgba(239, 68, 68, 0.1); }
-        }
-    </style>
-</head>
-<body class="bg-slate-50 min-h-screen text-slate-800 font-sans">
+      } catch (error) {
+        console.error("Gagal Autentikasi:", error);
+      }
+    };
 
-    <div id="app" class="max-w-md mx-auto min-h-screen relative pb-20">
-        
-        <!-- Login View -->
-        <div id="login-view" class="p-6 pt-20">
-            <div class="text-center mb-10">
-                <div class="bg-blue-600 w-20 h-20 rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4">
-                    <i data-lucide="qr-code" class="text-white w-12 h-12"></i>
-                </div>
-                <h1 class="text-2xl font-extrabold text-slate-900">PBB MOBILE</h1>
-                <p class="text-slate-500">Scan & OCR Terintegrasi</p>
-            </div>
-            <div class="bg-white p-6 rounded-3xl shadow-xl border border-slate-100">
-                <div class="mb-4">
-                    <label class="label-style">Username Petugas</label>
-                    <input type="text" id="username" class="form-input" placeholder="Masukkan nama Anda">
-                </div>
-                <div class="mb-6">
-                    <label class="label-style">Password</label>
-                    <input type="password" id="password" class="form-input" placeholder="••••••••">
-                </div>
-                <button onclick="handleLogin()" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-all">Masuk Aplikasi</button>
-            </div>
+    initAuth();
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        window.activateAppUI();
+      }
+    });
+  </script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { box-sizing: border-box; }
+    * { font-family: 'Nunito', sans-serif; }
+    .gradient-header { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #06b6d4 100%); }
+    .card-manual { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); border: 1px solid #e2e8f0; }
+    #app-interface { display: none; }
+    
+    @media print {
+      body * { visibility: hidden !important; }
+      #print-area, #print-area * { visibility: visible !important; }
+      #print-area { 
+        position: absolute !important; 
+        left: 0 !important; top: 0 !important; 
+        width: 100% !important; 
+        margin: 0 !important; padding: 40px !important;
+        display: block !important; background: white !important;
+      }
+      .no-print { display: none !important; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1.5px solid black; }
+      th, td { border: 1px solid black; padding: 10px; font-size: 11px; text-align: left; }
+      th { background-color: #e5e7eb !important; -webkit-print-color-adjust: exact; font-weight: bold; }
+    }
+  </style>
+ </head>
+ <body class="h-full bg-gradient-to-br from-slate-50 to-blue-50 overflow-auto">
+
+  <!-- ================= LOGIN MODAL ================= -->
+  <div id="loginModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+      <div class="gradient-header text-white p-6">
+        <div class="flex items-center gap-4">
+           <img src="./Desa%20Sukaluyu-225px.png" alt="Logo" class="w-14 h-auto shadow-sm rounded-lg bg-white p-1" 
+                onerror="this.src='Desa Sukaluyu-225px.png';">
+           <div>
+              <h3 class="text-xl font-bold leading-tight uppercase tracking-tighter">Login Aplikasi</h3>
+              <p class="text-blue-100 text-[10px] italic uppercase font-bold tracking-widest leading-tight">e-SPPT PBB KEL/DESA</p>
+           </div>
         </div>
-
-        <!-- Main Dashboard -->
-        <div id="main-view" class="hidden">
-            <header class="bg-blue-600 p-6 rounded-b-[2.5rem] shadow-lg text-white">
-                <div class="flex justify-between items-center mb-6">
-                    <div>
-                        <p class="text-blue-100 text-sm italic">Petugas Lapangan:</p>
-                        <h2 id="display-user" class="text-xl font-bold uppercase tracking-tight">Petugas</h2>
-                    </div>
-                    <button onclick="logout()" class="p-2 bg-blue-500 rounded-full hover:bg-blue-400 transition-colors">
-                        <i data-lucide="log-out" class="w-5 h-5"></i>
-                    </button>
-                </div>
-                
-                <div id="gps-banner" class="bg-white/10 p-4 rounded-2xl backdrop-blur-sm flex justify-between items-center text-xs border border-white/20 transition-all duration-500">
-                    <div class="flex items-center gap-2">
-                        <div id="gps-indicator" class="w-2.5 h-2.5 bg-red-500 rounded-full"></div>
-                        <div class="flex flex-col">
-                            <span id="gps-status" class="font-bold tracking-tight uppercase">Mencari GPS...</span>
-                        </div>
-                    </div>
-                    <div class="flex flex-col items-end">
-                        <span class="text-[8px] text-blue-200 uppercase font-bold tracking-widest">Akurasi</span>
-                        <span id="gps-accuracy" class="font-bold text-white text-sm">0m</span>
-                    </div>
-                </div>
-            </header>
-
-            <!-- Action Buttons -->
-            <div class="p-6 grid grid-cols-3 gap-3">
-                <button onclick="openScanner()" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center gap-2 active:bg-blue-50 transition-colors">
-                    <div class="p-2 bg-blue-100 rounded-xl"><i data-lucide="scan" class="text-blue-600 w-6 h-6"></i></div>
-                    <span class="font-bold text-[9px] text-slate-600">QR SCAN</span>
-                </button>
-                <button onclick="triggerOCR()" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center gap-2 active:bg-purple-50 transition-colors">
-                    <div class="p-2 bg-purple-100 rounded-xl"><i data-lucide="file-search" class="text-purple-600 w-6 h-6"></i></div>
-                    <span class="font-bold text-[9px] text-slate-600">FOTO OCR</span>
-                </button>
-                <button onclick="showSection('history')" class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center gap-2 active:bg-green-50 transition-colors">
-                    <div class="p-2 bg-green-100 rounded-xl"><i data-lucide="history" class="text-green-600 w-6 h-6"></i></div>
-                    <span class="font-bold text-[9px] text-slate-600">RIWAYAT</span>
-                </button>
-                <!-- Hidden Input for OCR -->
-                <input type="file" id="ocr-input" accept="image/*" class="hidden" onchange="handleOCR(event)">
-            </div>
-
-            <div id="content-section" class="px-6 pb-24">
-                <!-- QR Scanner View -->
-                <div id="scanner-view" class="hidden mb-6 bg-white p-4 rounded-3xl shadow-md border-2 border-dashed border-blue-200 overflow-hidden">
-                    <div id="reader"></div>
-                    <button onclick="closeScanner()" class="w-full mt-4 bg-red-50 text-red-600 font-bold py-3 rounded-xl text-xs uppercase tracking-wider">Batalkan</button>
-                </div>
-
-                <!-- Form Section -->
-                <div id="form-section" class="hidden animate-in slide-in-from-bottom-4 duration-300">
-                    <div class="bg-white rounded-3xl p-6 shadow-md space-y-4 border border-blue-50 relative overflow-hidden">
-                        <div class="absolute top-0 left-0 w-full h-1 bg-blue-600"></div>
-                        
-                        <div id="form-gps-warning" class="hidden p-3 bg-red-50 rounded-xl border border-red-100 flex items-center gap-3 mb-2">
-                            <i data-lucide="map-pin-off" class="text-red-500 w-5 h-5 shrink-0"></i>
-                            <p class="text-[10px] text-red-600 leading-tight"><b>Lokasi Kurang Akurat!</b> Harap ke tempat terbuka.</p>
-                        </div>
-
-                        <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2 mb-2">
-                             <i data-lucide="file-text" class="w-4 h-4 text-blue-600"></i> Detail Objek Pajak
-                        </h3>
-                        
-                        <div>
-                            <label class="label-style">NOP (Nomor Objek Pajak)</label>
-                            <div class="flex gap-2">
-                                <input type="text" id="inp-nop" class="form-input font-mono font-bold text-blue-800" placeholder="Ketik NOP...">
-                                <button onclick="manualSearch()" class="bg-blue-100 p-3 rounded-xl text-blue-600 active:scale-95">
-                                    <i data-lucide="search" class="w-5 h-5"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="label-style">Tahun</label>
-                                <input type="text" id="inp-tahun" class="form-input" placeholder="2025">
-                            </div>
-                            <div>
-                                <label class="label-style text-blue-600">Tagihan</label>
-                                <input type="text" id="inp-tagihan" class="form-input font-bold text-blue-600" placeholder="Rp 0">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="label-style">Nama Wajib Pajak</label>
-                            <input type="text" id="inp-nama" class="form-input font-bold uppercase" placeholder="Nama WP">
-                        </div>
-                        <div>
-                            <label class="label-style">Alamat Objek</label>
-                            <textarea id="inp-alamat" class="form-input h-14 resize-none leading-relaxed" placeholder="Alamat..."></textarea>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="label-style">RT</label>
-                                <input type="text" id="inp-rt" class="form-input" placeholder="000">
-                            </div>
-                            <div>
-                                <label class="label-style">RW</label>
-                                <input type="text" id="inp-rw" class="form-input" placeholder="000">
-                            </div>
-                        </div>
-                        
-                        <div class="pt-2">
-                             <h3 class="text-sm font-bold text-slate-700 flex items-center gap-2 mb-3">
-                                <i data-lucide="user-check" class="w-4 h-4 text-green-600"></i> Penerima
-                            </h3>
-                            <div class="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <input type="text" id="inp-penerima" class="form-input bg-white" placeholder="Nama Penerima Berkas...">
-                                <select id="inp-status" class="form-input bg-white">
-                                    <option value="Terkirim">Sudah Diterima Langsung</option>
-                                    <option value="Titip Tetangga">Titip Tetangga</option>
-                                    <option value="Rumah Kosong">Rumah Kosong</option>
-                                    <option value="Retur">WP Pindah/Meninggal</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <button onclick="submitData()" id="submit-btn" class="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all">
-                            <i data-lucide="send" class="w-5 h-5"></i> SIMPAN DATA
-                        </button>
-                    </div>
-                </div>
-
-                <!-- History Section -->
-                <div id="history-section" class="hidden">
-                    <div class="flex justify-between items-center mb-4">
-                         <h3 class="text-sm font-bold text-slate-700">Entri Terbaru</h3>
-                         <button onclick="loadHistory()" class="text-xs text-blue-600 font-bold">Refresh</button>
-                    </div>
-                    <div id="history-list" class="space-y-3"></div>
-                </div>
-            </div>
+      </div>
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Pilih Hak Akses</label>
+          <select id="userRole" class="w-full px-4 py-3 border-2 border-slate-200 rounded-lg outline-none focus:border-blue-500 transition-colors font-bold text-slate-700">
+            <option value="petugas">Petugas Lapangan</option>
+            <option value="rt">Admin RT/RW</option>
+            <option value="admin.kel/desa">Admin Kel/Desa</option>
+          </select>
         </div>
-
-        <!-- Global UI Components -->
-        <div id="toast" class="fixed bottom-24 left-6 right-6 p-4 rounded-2xl bg-slate-900 text-white text-[11px] shadow-2xl transition-all translate-y-32 opacity-0 z-50 flex items-center gap-3">
-            <i data-lucide="info" class="w-4 h-4"></i>
-            <span id="toast-msg"></span>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Username</label>
+          <input type="text" id="username" placeholder="ID Login" class="w-full px-4 py-3 border-2 border-slate-200 rounded-lg outline-none font-bold text-slate-700">
         </div>
-        
-        <div id="loading-overlay" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] hidden flex flex-col items-center justify-center">
-            <div class="loading-spinner mb-4 shadow-xl"></div>
-            <p id="loading-text" class="font-bold text-slate-700 text-[10px] tracking-[0.2em] uppercase">Memproses...</p>
+        <div>
+          <label class="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wide">Kata Sandi</label>
+          <input type="password" id="password" placeholder="••••••••" class="w-full px-4 py-3 border-2 border-slate-200 rounded-lg outline-none font-bold text-slate-700">
         </div>
+        <button id="loginBtn" onclick="handleLogin()" class="w-full py-4 bg-slate-400 text-white rounded-xl font-black shadow-lg disabled:opacity-70 transition-all uppercase tracking-widest" disabled>Menghubungkan Database...</button>
+        <p id="authStatusText" class="text-[10px] text-center text-slate-400 italic font-bold">Membangun koneksi cloud...</p>
+      </div>
     </div>
+  </div>
 
-    <script>
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz4ymzggOAmuWuvKlDImvdBtm3YcrgQPxYELKsNqFrkzdaNb4_f6GWAEFF-WLkPaTUP/exec";
+  <!-- ================= APP INTERFACE (Dashboard) ================= -->
+  <div id="app-interface" class="min-h-screen flex flex-col">
+    <header class="bg-white border-b px-4 py-4 sticky top-0 z-50 shadow-sm">
+      <div class="max-w-6xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <img src="./Desa%20Sukaluyu-225px.png" alt="Logo" class="w-10 h-auto" onerror="this.src='Desa Sukaluyu-225px.png';">
+          <div>
+            <h1 class="font-black text-slate-800 text-sm leading-tight uppercase tracking-tight">Aplikasi e-SPPT PBB KEL/DESA</h1>
+            <p id="ui-role-display" class="text-[9px] font-black text-blue-600 uppercase tracking-widest"></p>
+          </div>
+        </div>
+        <button onclick="location.reload()" class="text-[10px] font-bold text-red-600 border border-red-200 bg-red-50 px-4 py-2 rounded-full hover:bg-red-100 transition-all uppercase">Logout</button>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-6xl mx-auto w-full p-4 space-y-6">
+      <!-- Navigasi Utama -->
+      <div class="flex bg-white rounded-xl shadow-sm border p-1 no-print overflow-x-auto gap-1">
+        <button onclick="setTab('input')" id="tabBtn-input" class="flex-1 min-w-[100px] py-3 text-[10px] font-bold rounded-lg bg-blue-600 text-white shadow-md transition-all uppercase tracking-widest">INPUT DATA</button>
+        <button onclick="setTab('history')" id="tabBtn-history" class="flex-1 min-w-[100px] py-3 text-[10px] font-bold rounded-lg text-slate-500 transition-all uppercase tracking-widest">HISTORY & CETAK</button>
+        <button onclick="setTab('database')" id="tabBtn-database" class="flex-1 min-w-[100px] py-3 text-[10px] font-bold rounded-lg text-slate-500 transition-all uppercase tracking-widest hidden">DATABASE</button>
+        <button onclick="setTab('users')" id="tabBtn-users" class="flex-1 min-w-[100px] py-3 text-[10px] font-bold rounded-lg text-slate-500 transition-all uppercase tracking-widest hidden">KELOLA USER</button>
+      </div>
+
+      <!-- Tab: Input -->
+      <div id="view-input" class="max-w-4xl mx-auto w-full space-y-4 no-print">
+        <div class="bg-white rounded-2xl shadow-sm border p-6 text-center">
+          <h3 class="font-black text-slate-800 mb-4 uppercase text-sm tracking-widest">📄 Scan / Upload SPPT PBB</h3>
+          <input type="file" id="spptFile" accept="image/*,application/pdf" class="hidden" onchange="processOCR(this)">
+          <label for="spptFile" class="w-full py-10 border-2 border-dashed border-blue-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 transition-all group shadow-inner">
+            <span class="text-5xl mb-3 group-hover:scale-110 transition-transform">📸</span>
+            <span class="text-xs font-bold text-blue-600 uppercase tracking-tighter">Ambil Foto / Berkas SPPT PBB</span>
+          </label>
+          <div id="ocrStatus" class="hidden mt-4 p-4 bg-blue-50 text-blue-700 rounded-xl text-xs font-bold animate-pulse">AI sedang menganalisis dokumen...</div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border p-6">
+          <h3 class="font-black text-slate-800 mb-6 uppercase text-sm tracking-widest border-b pb-2 flex items-center gap-2"><span>🏠</span> Detail Form Pendataan</h3>
+          <form id="pendataanForm" class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div class="col-span-2">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">NOP (Nomor Objek Pajak)</label>
+                <input type="text" id="f_nop" required class="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold code-font focus:ring-2 focus:ring-blue-100 outline-none">
+              </div>
+              <div class="col-span-2">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Letak Objek Pajak</label>
+                <textarea id="f_letak" required class="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-100" rows="2"></textarea>
+              </div>
+              <div class="col-span-2">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Nama Wajib Pajak</label>
+                <input type="text" id="f_nama" required class="w-full px-4 py-3 border rounded-xl text-sm font-bold outline-none uppercase">
+              </div>
+              <div class="col-span-2">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Alamat Lengkap WP</label>
+                <textarea id="f_alamat" required class="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-blue-100" rows="2"></textarea>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tahun SPPT</label>
+                <input type="text" id="f_tahun" required class="w-full px-4 py-3 border rounded-xl text-sm text-center font-bold">
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">PBB Terutang (Rp)</label>
+                <input type="text" id="f_pajak" required class="w-full px-4 py-3 border rounded-xl text-sm font-black text-blue-700">
+              </div>
+            </div>
+            
+            <button type="button" onclick="getGPS()" class="w-full py-3 bg-slate-800 text-white rounded-xl text-[10px] font-bold hover:bg-black transition-all uppercase tracking-widest shadow-lg">📍 LOCK KOORDINAT LOKASI GPS (PRESISI)</button>
+            <div class="flex gap-2">
+               <input type="text" id="f_lat" readonly class="flex-1 px-3 py-2 bg-slate-100 border rounded-lg text-[8px] text-center" placeholder="LATITUDE">
+               <input type="text" id="f_lng" readonly class="flex-1 px-3 py-2 bg-slate-100 border rounded-lg text-[8px] text-center" placeholder="LONGITUDE">
+            </div>
+
+            <div class="h-px bg-slate-100 my-4"></div>
+            
+            <div>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Status Distribusi SPPT</label>
+              <select id="f_status" class="w-full px-4 py-4 border rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-100 outline-none transition-all">
+                <option value="Terkirim">✅ Sudah Terkirim</option>
+                <option value="Rumah Kosong">🏠 Rumah Kosong</option>
+                <option value="Warga Pindah">🚶 Warga Sudah Pindah</option>
+              </select>
+            </div>
+            <button type="submit" id="saveBtn" class="w-full py-5 gradient-header text-white rounded-2xl font-black shadow-2xl hover:scale-[1.02] transition-all uppercase tracking-widest text-lg">Simpan Data Ke Cloud</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Tab: History -->
+      <div id="view-history" class="max-w-4xl mx-auto w-full hidden space-y-4 no-print">
+        <div class="bg-white p-4 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm">
+          <h2 class="font-black text-slate-800 text-xs uppercase tracking-widest">Rekap Pendataan Terkini</h2>
+          <span id="data-count-card" class="bg-blue-600 text-white text-[10px] px-3 py-1 rounded-full font-bold">0 Data</span>
+        </div>
+        <div id="dataList" class="space-y-4"></div>
+      </div>
+
+      <!-- Tab: Database -->
+      <div id="view-database" class="hidden space-y-4 no-print">
+        <div class="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
+            <div>
+              <h2 class="font-black text-slate-800 text-lg uppercase tracking-tighter">💾 Database Real-Time Cloud</h2>
+              <div class="flex gap-2 mt-2">
+                 <button onclick="exportToExcel()" class="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[9px] font-black shadow flex items-center gap-1 uppercase">📊 Excel</button>
+                 <button onclick="printAll()" class="bg-red-600 text-white px-3 py-1.5 rounded-lg text-[9px] font-black shadow flex items-center gap-1 uppercase">📄 PDF Rekap</button>
+              </div>
+            </div>
+          </div>
+          <div class="overflow-x-auto border rounded-2xl bg-slate-50">
+            <table class="w-full text-[10px] border-collapse">
+              <thead>
+                <tr class="bg-slate-200 text-slate-700 uppercase font-bold text-[9px]">
+                  <th class="p-3 border text-center">No</th>
+                  <th class="p-3 border">NOP</th>
+                  <th class="p-3 border">Wajib Pajak</th>
+                  <th class="p-3 border text-center">Thn</th>
+                  <th class="p-3 border text-right">Pajak (Rp)</th>
+                  <th class="p-3 border text-center">Status</th>
+                  <th class="p-3 border text-center">Petugas</th>
+                </tr>
+              </thead>
+              <tbody id="db-table-body" class="bg-white"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Kelola User -->
+      <div id="view-users" class="hidden space-y-6 no-print">
+        <div class="bg-white p-8 rounded-3xl border shadow-lg space-y-6 max-w-4xl mx-auto w-full">
+          <h2 class="font-black text-slate-800 text-sm uppercase tracking-widest flex items-center gap-2 border-b pb-2"><span>👤</span> Manajemen Akun Petugas</h2>
+          <form id="userManagementForm" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <input type="hidden" id="u_id">
+            <div class="md:col-span-1">
+              <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Nama Petugas</label>
+              <input type="text" id="u_name" required class="w-full px-4 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-blue-500 uppercase">
+            </div>
+            <div class="md:col-span-1">
+              <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">ID Login</label>
+              <input type="text" id="u_username" required class="w-full px-4 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-blue-500">
+            </div>
+            <div class="md:col-span-1">
+              <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Jabatan</label>
+              <select id="u_role" class="w-full px-4 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold outline-none">
+                <option value="petugas">Petugas Lapangan</option>
+                <option value="rt">Admin RT/RW</option>
+              </select>
+            </div>
+            <button type="submit" id="u_saveBtn" class="bg-blue-600 text-white font-black text-[10px] py-3.5 rounded-xl shadow-xl hover:bg-blue-700 transition-all uppercase tracking-widest">Simpan</button>
+          </form>
+        </div>
+
+        <div class="bg-white p-6 rounded-3xl border shadow-sm max-w-4xl mx-auto w-full overflow-hidden">
+          <div class="overflow-x-auto rounded-2xl border">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-600 font-bold uppercase text-[10px]">
+                  <th class="p-4 border text-center">No</th>
+                  <th class="p-4 border">Nama Lengkap</th>
+                  <th class="p-4 border">Username</th>
+                  <th class="p-4 border text-center">Jabatan</th>
+                  <th class="p-4 border text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="user-table-body" class="bg-white"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Area Cetak -->
+    <div id="print-area" class="hidden">
+      <div style="text-align:center; border-bottom: 3px solid #000; padding-bottom: 20px; margin-bottom: 30px;">
+        <img src="./Desa%20Sukaluyu-225px.png" style="width: 80px; height: auto; margin-bottom: 10px;" onerror="this.src='Desa Sukaluyu-225px.png';">
+        <h2 style="margin:0; font-size:22px; font-weight:900; text-transform: uppercase;">REKAPITULASI PENDATAAN e-SPPT PBB</h2>
+        <p style="margin:5px 0 0 0; font-size:14px; font-weight:bold;">Pemerintah Kelurahan / Desa Sukaluyu</p>
+      </div>
+      <div id="print-content"></div>
+      <div style="margin-top: 60px; display: flex; justify-content: space-between; font-size: 13px;">
+        <div id="print-date-info">Dicetak pada: </div>
+        <div style="text-align:center; min-width: 250px;">
+          <p>Tanda Tangan Petugas,</p>
+          <br><br><br><br><br>
+          <p id="print-officer-name" style="font-weight:900; border-top:2px solid #000; padding-top:8px; text-transform: uppercase;"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= COVER MANUAL UTAMA ================= -->
+  <div id="manual-interface">
+    <div class="min-h-screen flex items-center justify-center gradient-header text-white p-8 text-center relative overflow-hidden">
+      <div class="absolute -top-32 -left-32 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
+      <div class="absolute -bottom-32 -right-32 w-96 h-96 bg-blue-400/20 rounded-full blur-3xl"></div>
+      
+      <div class="relative z-10 max-w-2xl flex flex-col items-center">
+        <div class="mb-10 p-6 bg-white/10 backdrop-blur-xl rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.2)] border border-white/20 transition-all hover:scale-105 duration-500">
+           <img src="./Desa%20Sukaluyu-225px.png" alt="Logo Desa Sukaluyu" class="w-40 md:w-56 h-auto drop-shadow-2xl" 
+                onerror="this.src='Desa Sukaluyu-225px.png';">
+        </div>
+        <h1 class="text-4xl md:text-7xl font-black mb-6 leading-tight tracking-tighter drop-shadow-2xl uppercase">e-SPPT PBB<br>DIGITAL</h1>
+        <div class="h-2 w-24 bg-white rounded-full mb-8 opacity-50"></div>
+        <p class="text-blue-50 mb-12 text-xl font-black uppercase tracking-[0.2em] drop-shadow tracking-tighter">DESA SUKALUYU - KARAWANG</p>
+        <button onclick="showLoginModal()" class="bg-white text-blue-700 px-16 py-5 rounded-full font-black shadow-2xl hover:bg-blue-50 transition-all uppercase tracking-widest text-lg">Masuk Aplikasi 🚀</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let userData = null;
+    let currentData = []; 
+    let unsubscribeSnapshot = null;
+    let unsubscribeUsers = null;
+
+    function showLoginModal() { 
+      document.getElementById('loginModal').classList.remove('hidden'); 
+    }
+    
+    function setTab(tab) {
+      const views = ['input', 'history', 'database', 'users'];
+      views.forEach(v => {
+        const viewEl = document.getElementById(`view-${v}`);
+        if(viewEl) viewEl.classList.toggle('hidden', v !== tab);
         
-        let currentUser = null;
-        let currentPos = { lat: null, lng: null, accuracy: null };
-        let html5QrCode = null;
-        let watchId = null;
-
-        // --- FUNGSI OCR (GAMBAR KE TEXT) ---
-        function triggerOCR() {
-            document.getElementById('ocr-input').click();
+        const btnEl = document.getElementById(`tabBtn-${v}`);
+        if(btnEl) {
+          btnEl.className = v === tab ? 
+            "flex-1 min-w-[100px] py-3 text-[10px] font-bold rounded-lg bg-blue-600 text-white shadow-md transition-all uppercase tracking-widest" : 
+            "flex-1 min-w-[100px] py-3 text-[10px] font-bold rounded-lg text-slate-500 hover:text-blue-400 transition-all uppercase tracking-widest";
         }
+      });
+    }
 
-        async function handleOCR(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+    function handleLogin() {
+      if (!window.auth.currentUser) return alert("Sistem belum siap terhubung.");
+      const role = document.getElementById('userRole').value;
+      const user = document.getElementById('username').value || 'Petugas Sukaluyu';
+      userData = { name: user, role: role };
 
-            toggleLoading(true, "SEDANG MEMBACA GAMBAR (OCR)...");
-            
-            try {
-                // Konfigurasi worker tesseract untuk bahasa Indonesia
-                const worker = await Tesseract.createWorker('ind');
-                const { data: { text } } = await worker.recognize(file);
-                await worker.terminate();
+      document.getElementById('manual-interface').style.display = 'none';
+      document.getElementById('app-interface').style.display = 'flex';
+      const roleDisplay = document.getElementById('ui-role-display');
+      if (roleDisplay) roleDisplay.textContent = `Role Akses: ${role}`;
+      
+      document.getElementById('loginModal').classList.add('hidden');
+      
+      if(role === 'admin.kel/desa') {
+        const dbTab = document.getElementById('tabBtn-database');
+        const userTab = document.getElementById('tabBtn-users');
+        if (dbTab) dbTab.classList.remove('hidden');
+        if (userTab) userTab.classList.remove('hidden');
+        loadUserList();
+      }
+      loadHistory();
+    }
 
-                console.log("OCR Result:", text);
-                extractInfoFromText(text);
-                
-                showToast("✅ OCR Berhasil Membaca Gambar");
-            } catch (err) {
-                console.error(err);
-                showToast("❌ Gagal membaca gambar");
-            } finally {
-                toggleLoading(false);
-                event.target.value = ""; // Reset input
-            }
-        }
+    function loadUserList() {
+      const colRef = window.firestore.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'users_list');
+      if (unsubscribeUsers) unsubscribeUsers();
+      unsubscribeUsers = window.firestore.onSnapshot(colRef, (snap) => {
+        const tbody = document.getElementById('user-table-body');
+        if (!tbody) return;
+        tbody.innerHTML = "";
+        let index = 1;
+        snap.forEach(doc => {
+          const u = doc.data();
+          const row = document.createElement('tr');
+          row.className = "hover:bg-slate-50 border-b";
+          row.innerHTML = `<td class="p-4 border text-center font-bold text-slate-400">${index++}</td><td class="p-4 border font-black uppercase text-slate-700 text-xs">${u.name}</td><td class="p-4 border text-blue-600 font-bold text-xs">${u.username}</td><td class="p-4 border text-center"><span class="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-black uppercase text-[8px] border border-blue-100">${u.role}</span></td><td class="p-4 border text-center flex justify-center gap-2"><button onclick='editUserUI(${JSON.stringify({id: doc.id, ...u})})' class="p-2 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors">✏️</button><button onclick='deleteUser("${doc.id}")' class="p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors">🗑️</button></td>`;
+          tbody.appendChild(row);
+        });
+      }, (err) => console.error("User List Error:", err));
+    }
 
-        function extractInfoFromText(text) {
-            // Bersihkan teks dari baris baru yang berlebihan
-            const cleanText = text.replace(/\n/g, ' ');
-            
-            // Cari NOP (Pola standar XX.XX.XXX.XXX.XXX-XXXX.X atau 18 digit angka)
-            const nopMatch = text.match(/\d{2}\.\d{2}\.\d{3}\.\d{3}\.\d{3}\-\d{4}\.\d{1}/) || text.match(/\d{18}/);
-            
-            showSection('scan');
-            
-            if (nopMatch) {
-                const rawNop = nopMatch[0].replace(/[^0-9]/g, '');
-                document.getElementById('inp-nop').value = rawNop;
-                fetchDataByNOP(rawNop);
-            } else {
-                showToast("⚠️ NOP tidak terdeteksi jelas, silakan input manual.");
-                enableManualInput();
-            }
-        }
+    document.getElementById('userManagementForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const uId = document.getElementById('u_id').value;
+      const payload = { name: document.getElementById('u_name').value, username: document.getElementById('u_username').value, role: document.getElementById('u_role').value };
+      try {
+        const colRef = window.firestore.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'users_list');
+        if(uId) { await window.firestore.updateDoc(window.firestore.doc(colRef, uId), payload); alert("Data Akun Diperbarui!"); }
+        else { await window.firestore.addDoc(colRef, { ...payload, createdAt: window.firestore.serverTimestamp() }); alert("Akun Baru Berhasil Dibuat!"); }
+        document.getElementById('userManagementForm').reset(); 
+        document.getElementById('u_id').value = "";
+        const saveBtn = document.getElementById('u_saveBtn');
+        if (saveBtn) saveBtn.innerText = "Simpan Akun";
+      } catch (err) { alert("Gagal kelola user."); }
+    });
 
-        // --- SISTEM LOGIN & GPS ---
-        function handleLogin() {
-            const user = document.getElementById('username').value;
-            if(!user) return showToast("Masukkan Nama Petugas!");
-            currentUser = { name: user };
-            document.getElementById('display-user').innerText = user;
-            document.getElementById('login-view').classList.add('hidden');
-            document.getElementById('main-view').classList.remove('hidden');
-            lucide.createIcons();
-            startGpsTracking(); 
-        }
+    window.editUserUI = (u) => { 
+      const idInput = document.getElementById('u_id');
+      const nameInput = document.getElementById('u_name');
+      const userInput = document.getElementById('u_username');
+      const roleInput = document.getElementById('u_role');
+      const saveBtn = document.getElementById('u_saveBtn');
+      if (idInput) idInput.value = u.id; 
+      if (nameInput) nameInput.value = u.name; 
+      if (userInput) userInput.value = u.username; 
+      if (roleInput) roleInput.value = u.role; 
+      if (saveBtn) saveBtn.innerText = "Update Akun"; 
+    };
 
-        function startGpsTracking() {
-            if (!navigator.geolocation) return;
-            watchId = navigator.geolocation.watchPosition((p) => {
-                currentPos.lat = p.coords.latitude;
-                currentPos.lng = p.coords.longitude;
-                currentPos.accuracy = Math.round(p.coords.accuracy);
-                document.getElementById('gps-accuracy').innerText = currentPos.accuracy + "m";
-                const indicator = document.getElementById('gps-indicator');
-                indicator.className = currentPos.accuracy <= 20 ? "w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" : "w-2.5 h-2.5 bg-red-500 rounded-full";
-                document.getElementById('gps-status').innerText = currentPos.accuracy <= 20 ? "GPS AKURAT" : "MENCARI SINYAL...";
-            }, null, { enableHighAccuracy: true });
-        }
+    window.deleteUser = async (id) => { 
+      if(confirm("Yakin hapus akun ini?")) { 
+        const docRef = window.firestore.doc(window.db, 'artifacts', window.appId, 'public', 'data', 'users_list', id); 
+        await window.firestore.deleteDoc(docRef); 
+      } 
+    };
 
-        // --- SISTEM SCANNER QR ---
-        async function openScanner() {
-            document.getElementById('scanner-view').classList.remove('hidden');
-            document.getElementById('form-section').classList.add('hidden');
-            if (html5QrCode) await html5QrCode.stop().catch(() => {});
-            html5QrCode = new Html5Qrcode("reader");
-            await html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (txt) => {
-                closeScanner();
-                fetchDataByNOP(txt.replace(/[^0-9]/g, ''));
-            });
-        }
+    async function processOCR(input) {
+      if (!input.files || !input.files[0]) return;
+      const status = document.getElementById('ocrStatus');
+      if (status) status.classList.remove('hidden');
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Data = e.target.result.split(',')[1];
+        const apiKey = ""; 
+        const prompt = "Ekstrak data dari SPPT PBB format JSON: {nop, letak_objek, nama_wp, alamat_wp, tahun_sppt, pbb_dibayar}. pbb_dibayar angka saja.";
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: input.files[0].type, data: base64Data } }] }] })
+          });
+          const result = await res.json();
+          const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const jsonMatch = text.match(/\{.*\}/s);
+          if (jsonMatch) {
+            const data = JSON.parse(jsonMatch[0]);
+            document.getElementById('f_nop').value = data.nop || '';
+            document.getElementById('f_letak').value = data.letak_objek || '';
+            document.getElementById('f_nama').value = data.nama_wp || '';
+            document.getElementById('f_alamat').value = data.alamat_wp || '';
+            document.getElementById('f_tahun').value = data.tahun_sppt || '';
+            document.getElementById('f_pajak').value = data.pbb_dibayar || '';
+          }
+        } catch (err) { alert("AI gagal membaca gambar."); }
+        finally { if (status) status.classList.add('hidden'); }
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
 
-        async function closeScanner() {
-            if (html5QrCode) await html5QrCode.stop();
-            document.getElementById('scanner-view').classList.add('hidden');
-        }
+    function getGPS() {
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const latInput = document.getElementById('f_lat');
+        const lngInput = document.getElementById('f_lng');
+        if (latInput) latInput.value = pos.coords.latitude.toFixed(6);
+        if (lngInput) lngInput.value = pos.coords.longitude.toFixed(6);
+      }, () => alert("GPS Gagal. Cek Izin Lokasi."), { enableHighAccuracy: true });
+    }
 
-        function manualSearch() {
-            const nop = document.getElementById('inp-nop').value;
-            if (nop.length < 5) return showToast("⚠️ NOP terlalu pendek");
-            fetchDataByNOP(nop);
-        }
+    document.getElementById('pendataanForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const saveBtn = document.getElementById('saveBtn');
+      if (saveBtn) saveBtn.disabled = true;
+      const payload = {
+        nop: document.getElementById('f_nop').value, letak: document.getElementById('f_letak').value,
+        nama: document.getElementById('f_nama').value, alamat: document.getElementById('f_alamat').value,
+        tahun: document.getElementById('f_tahun').value, pajak: document.getElementById('f_pajak').value,
+        status: document.getElementById('f_status').value, lat: document.getElementById('f_lat').value,
+        lng: document.getElementById('f_lng').value, officer: userData.name, timestamp: window.firestore.serverTimestamp()
+      };
+      try {
+        const colRef = window.firestore.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'rekap_pbb');
+        await window.firestore.addDoc(colRef, payload);
+        alert("Tersimpan!"); document.getElementById('pendataanForm').reset(); setTab('history');
+      } catch (err) { alert("Database Error."); }
+      finally { if (saveBtn) saveBtn.disabled = false; }
+    });
 
-        // --- SISTEM DATABASE ---
-        async function fetchDataByNOP(nop) {
-            toggleLoading(true, "MENCARI DATA...");
-            try {
-                const resp = await fetch(`${SCRIPT_URL}?action=getNopData&nop=${nop}`);
-                const res = await resp.json();
-                
-                showSection('scan');
-                document.getElementById('inp-nop').value = nop;
+    function loadHistory() {
+      const colRef = window.firestore.collection(window.db, 'artifacts', window.appId, 'public', 'data', 'rekap_pbb');
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+      unsubscribeSnapshot = window.firestore.onSnapshot(colRef, (snap) => {
+        const list = document.getElementById('dataList');
+        const dbBody = document.getElementById('db-table-body');
+        const countCard = document.getElementById('data-count-card');
+        
+        if (list) list.innerHTML = ""; 
+        if (dbBody) dbBody.innerHTML = ""; 
+        currentData = [];
+        let idx = 1;
 
-                if(res.result === 'success') {
-                    document.getElementById('inp-tahun').value = res.data.Tahun || "2025";
-                    document.getElementById('inp-nama').value = res.data.Nama_WP;
-                    document.getElementById('inp-alamat').value = res.data.Alamat_OP;
-                    document.getElementById('inp-rt').value = res.data.RT;
-                    document.getElementById('inp-rw').value = res.data.RW;
-                    document.getElementById('inp-tagihan').value = res.data.Tagihan;
-                    showToast("✅ Data ditemukan!");
-                } else {
-                    showToast("⚠️ NOP tidak ada di database. Silakan isi manual.");
-                    enableManualInput();
-                }
-            } catch (e) { showToast("⚠️ Gagal koneksi database"); }
-            finally { toggleLoading(false); }
-        }
+        snap.forEach(doc => {
+          const d = doc.data(); d.id = doc.id; currentData.push(d);
+          
+          if (list) {
+            const item = document.createElement('div');
+            item.className = "bg-white p-5 rounded-2xl border border-slate-100 flex flex-col gap-2 shadow-sm";
+            item.innerHTML = `<div class="flex justify-between items-start"><div class="flex-1"><p class="text-[9px] font-black text-blue-600 tracking-widest">${d.nop}</p><h4 class="font-black text-sm uppercase text-slate-800">${d.nama}</h4><p class="text-[8px] text-slate-400 font-bold uppercase">${d.letak.substring(0,80)}...</p></div><div class="text-right"><p class="text-xs font-black text-slate-800">Rp ${d.pajak}</p><p class="text-[8px] font-bold text-slate-300 uppercase">THN ${d.tahun}</p></div></div><div class="flex justify-between items-center mt-2 pt-3 border-t border-slate-50"><span class="text-[8px] px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 font-black uppercase tracking-tighter">${d.status}</span><button onclick="printSingleData('${doc.id}')" class="text-slate-800 text-[9px] font-black hover:text-blue-600 uppercase">🖨️ Cetak Bukti</button></div>`;
+            list.appendChild(item);
+          }
+          
+          if (dbBody) {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td class="p-3 border text-center font-bold text-slate-400">${idx++}</td><td class="p-3 border font-bold text-blue-700">${d.nop}</td><td class="p-3 border uppercase font-black text-slate-700 text-[9px]">${d.nama}</td><td class="p-3 border text-center font-bold">${d.tahun}</td><td class="p-3 border text-right font-black">Rp ${d.pajak}</td><td class="p-3 border text-center font-bold text-[9px] uppercase">${d.status}</td><td class="p-3 border text-[9px] text-slate-400 font-bold uppercase">${d.officer}</td>`;
+            dbBody.appendChild(row);
+          }
+        });
+        if (countCard) countCard.textContent = `${currentData.length} Data Terinput`;
+      }, (err) => console.error("Firestore Error:", err));
+    }
 
-        function enableManualInput() {
-            ['inp-tahun','inp-nama','inp-alamat','inp-rt','inp-rw','inp-tagihan'].forEach(id => {
-                const el = document.getElementById(id);
-                el.removeAttribute('readonly');
-                el.classList.replace('bg-slate-100', 'bg-white');
-                el.classList.add('border', 'border-blue-200');
-            });
-        }
+    function exportToExcel() {
+      if (currentData.length === 0) return alert("Data kosong.");
+      const ws = XLSX.utils.json_to_sheet(currentData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Rekap PBB");
+      XLSX.writeFile(wb, `Rekap_Sukaluyu_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
 
-        async function submitData() {
-            const penerima = document.getElementById('inp-penerima').value;
-            if(!penerima) return showToast("⚠️ Nama Penerima wajib diisi!");
-            
-            const payload = {
-                action: 'inputData',
-                nop: document.getElementById('inp-nop').value,
-                tahun: document.getElementById('inp-tahun').value,
-                nama_wp: document.getElementById('inp-nama').value,
-                alamat_op: document.getElementById('inp-alamat').value,
-                rt: document.getElementById('inp-rt').value,
-                rw: document.getElementById('inp-rw').value,
-                tagihan: document.getElementById('inp-tagihan').value,
-                status: document.getElementById('inp-status').value,
-                penerima: penerima,
-                lat: currentPos.lat,
-                lng: currentPos.lng,
-                maps_link: `https://www.google.com/maps?q=${currentPos.lat},${currentPos.lng}`,
-                petugas: currentUser.name
-            };
+    function printAll() {
+      if (currentData.length === 0) return alert("Rekap kosong.");
+      const printArea = document.getElementById('print-area');
+      const printContent = document.getElementById('print-content');
+      const dateInfo = document.getElementById('print-date-info');
+      const officerName = document.getElementById('print-officer-name');
 
-            toggleLoading(true, "MENYIMPAN...");
-            try {
-                const response = await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const res = await response.json();
-                if(res.result === 'success') {
-                    showToast("🚀 Berhasil disimpan!");
-                    showSection('history');
-                }
-            } catch (e) { showToast("❌ Gagal menyimpan!"); }
-            finally { toggleLoading(false); }
-        }
+      if (dateInfo) dateInfo.innerHTML = `Dicetak pada: <b>${new Date().toLocaleString('id-ID')}</b>`;
+      if (officerName) officerName.innerText = userData ? userData.name : 'Petugas';
 
-        // --- UTILS ---
-        function showSection(name) {
-            document.getElementById('form-section').classList.toggle('hidden', name !== 'scan');
-            document.getElementById('history-section').classList.toggle('hidden', name !== 'history');
-            if(name === 'history') loadHistory();
-        }
+      let total = 0;
+      let html = `<table><thead><tr><th>NOP</th><th>WP / Letak</th><th style="text-align:center;">Thn</th><th style="text-align:right;">Pajak (Rp)</th><th>Status</th></tr></thead><tbody>`;
+      currentData.forEach(d => {
+        total += parseInt(String(d.pajak).replace(/[^0-9]/g, "")) || 0;
+        html += `<tr><td>${d.nop}</td><td><b>${d.nama}</b><br><small>${d.letak}</small></td><td style="text-align:center;">${d.tahun}</td><td style="text-align:right;">${d.pajak}</td><td>${d.status}</td></tr>`;
+      });
+      html += `</tbody><tfoot><tr style="background:#f3f4f6; font-weight:900;"><td colspan="3" style="text-align:right; padding:10px;">TOTAL REKAPITULASI:</td><td style="text-align:right; padding:10px;">Rp ${total.toLocaleString('id-ID')}</td><td></td></tr></tfoot></table>`;
+      
+      if (printContent) printContent.innerHTML = html;
+      if (printArea) printArea.classList.remove('hidden');
+      window.focus();
+      setTimeout(() => { 
+        window.print(); 
+        if (printArea) printArea.classList.add('hidden'); 
+      }, 500);
+    }
 
-        function toggleLoading(s, t) {
-            document.getElementById('loading-overlay').classList.toggle('hidden', !s);
-            document.getElementById('loading-text').innerText = t;
-        }
+    window.printSingleData = function(docId) {
+      const data = currentData.find(item => item.id === docId);
+      if(!data) return;
+      const printArea = document.getElementById('print-area');
+      const printContent = document.getElementById('print-content');
+      const dateInfo = document.getElementById('print-date-info');
+      const officerName = document.getElementById('print-officer-name');
 
-        function showToast(m) {
-            const t = document.getElementById('toast'); 
-            document.getElementById('toast-msg').innerText = m;
-            t.classList.remove('translate-y-32', 'opacity-0');
-            setTimeout(() => t.classList.add('translate-y-32', 'opacity-0'), 3000);
-        }
-
-        async function loadHistory() {
-            const list = document.getElementById('history-list');
-            list.innerHTML = '<p class="text-center py-10 animate-pulse text-[10px]">Memuat...</p>';
-            try {
-                const r = await fetch(SCRIPT_URL);
-                const d = await r.json();
-                if(!d.length) {
-                    list.innerHTML = '<p class="text-center py-10 text-[10px]">Kosong</p>';
-                } else {
-                    list.innerHTML = d.slice(-10).reverse().map(i => `
-                        <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-blue-600">
-                            <p class="text-[9px] font-bold text-blue-600 font-mono">${i.NOP}</p>
-                            <p class="font-bold text-xs uppercase">${i.Nama_WP}</p>
-                            <div class="flex justify-between mt-2 text-[9px] text-slate-400">
-                                <span>${i.Status}</span>
-                                <span>${new Date(i.Waktu).toLocaleTimeString()}</span>
-                            </div>
-                        </div>
-                    `).join('');
-                }
-            } catch (e) { list.innerHTML = 'Error'; }
-        }
-
-        function logout() { location.reload(); }
-    </script>
-</body>
+      if (dateInfo) dateInfo.innerHTML = `Tgl Kunjungan: <b>${new Date().toLocaleString('id-ID')}</b>`;
+      if (officerName) officerName.innerText = userData ? userData.name : 'Petugas';
+      
+      if (printContent) printContent.innerHTML = `<div style="border:4px solid #000; padding:30px; border-radius:20px; margin-top:15px; background: white;"><table style="width:100%; border:none;"><tr><td style="width:45%; font-weight:900; border:none; padding:6px; font-size:12px;">NOP</td><td style="border:none; font-weight:900; font-size:12px;">: ${data.nop}</td></tr><tr><td style="font-weight:900; border:none; padding:6px; font-size:12px;">WAJIB PAJAK</td><td style="border:none; font-size:12px; font-weight:bold;">: ${data.nama}</td></tr><tr><td style="font-weight:900; border:none; padding:6px; font-size:12px;">LETAK OBJEK</td><td style="border:none; font-size:11px;">: ${data.letak}</td></tr><tr><td colspan="2" style="border:none;"><hr style="border:1.5px dashed #000; margin:15px 0;"></td></tr><tr><td style="font-weight:900; border:none; padding:6px; font-size:12px;">TAHUN PAJAK</td><td style="border:none; font-size:12px;">: ${data.tahun}</td></tr><tr style="font-size:22px; font-weight:900;"><td style="border:none; padding:15px 6px;">PBB TERUTANG</td><td style="border:none; padding:15px 6px;">: Rp ${data.pajak}</td></tr><tr><td style="font-weight:900; border:none; padding:6px; font-size:12px;">STATUS</td><td style="border:none; font-size:12px; font-weight:bold;">: ${data.status}</td></tr></table><p style="font-size:10px; text-align:center; margin-top:30px; font-style:italic; border-top:1px solid #ddd; padding-top:15px;">Dokumen ini merupakan bukti pendataan lapangan Desa Sukaluyu.</p></div>`;
+      if (printArea) printArea.classList.remove('hidden');
+      window.focus();
+      setTimeout(() => { 
+        window.print(); 
+        if (printArea) printArea.classList.add('hidden'); 
+      }, 500);
+    }
+  </script>
+ </body>
 </html>
